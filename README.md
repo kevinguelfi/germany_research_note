@@ -20,10 +20,10 @@ Existing work has debated whether AfD support reflects economic dislocation ("mo
 
 ## Contribution
 
-- **Empirical**: Documents municipality-level geographic patterns of AfD support and change (2021–2025) across 10,676 *Gemeinden*
-- **Empirical**: Provides a covariate balance check between Eastern and Western municipalities using 2022 INKAR indicators
-- **Empirical**: Estimates individual-level predictors of AfD voting using the 2025 GLES post-election survey
-- **Empirical**: Situates the AfD's ideological profile in the German party system using Manifesto Project coding
+- **Geographic Analysis**: Documents municipality-level geographic patterns of AfD support and change (2021–2025) across 10,676 *Gemeinden*
+- **Regional Balance Check**: Provides a covariate balance check between Eastern and Western municipalities using 2022 INKAR indicators
+- **Individual Level Modeling**: Estimates individual-level predictors of AfD voting using the 2025 GLES post-election survey
+- **Ideological Positioning**: Situates the AfD's ideological profile in the German party system using Manifesto Project coding
 
 ---
 
