@@ -1,0 +1,626 @@
+---
+title: "Behind the AfD's 2025 Result: A Brief Empirical Note"
+author:
+  - name: "Kevin Guelfi^[University of Chicago: kguelfi@uchicago.edu]"
+date: "September 2026"
+abstract: |
+  The Alternative für Deutschland (AfD) secured 20.8 percent of the second vote (Zweitstimme) in the 2025 German Federal Election — the strongest result for a right-wing populist party in postwar German federal electoral history. This research note examines what drove that result across four complementary dimensions. Using municipality-level electoral data from GERDA, I show that the 2025 surge was simultaneously a nationwide shift and a deepening of pre-existing regional concentration: Eastern municipalities gained a median of 18 percentage points since 2021, against 11 in the West. A covariate balance check using INKAR socioeconomic indicators documents deep structural divergences between Eastern and Western municipalities in unemployment, purchasing power, and demographic decline, providing context for — but not a full explanation of — the geographic gap. Linear probability models estimated on the 2025 German Longitudinal Election Study (GLES) reveal that right-wing extremist attitudes — particularly agreement that Germany is "over-foreignized" and needs a strong nationalist party — are the dominant individual-level predictors of AfD voting, substantially outpacing demographic and economic factors across all model specifications. Manifesto Project coding places the AfD as the most right-leaning party in the 2025 Bundestag by a considerable margin, ruling out explanations based on centrist repositioning. Taken together, the findings suggest that the AfD's success reflects a genuine supply-and-demand alignment on the far right: a large attitudinal constituency found in the AfD a credible programmatic supplier, amplified by structural grievances concentrated in Eastern Germany.
+
+bibliography: references.bib
+format:
+  pdf:
+    pdf-engine: lualatex
+    documentclass: article
+    latex-auto-install: false
+    fontsize: 11pt
+    geometry: "top=1in, bottom=1in, left=1.25in, right=1.25in"
+    linestretch: 1.5
+    fig-pos: "H"
+    fig-cap-location: top
+    tbl-cap-location: top
+    colorlinks: true
+    linkcolor: blue
+    citecolor: blue
+    urlcolor: black
+    include-in-header:
+      text: |
+        \usepackage{booktabs,array,longtable,float,graphicx,caption,microtype,setspace,fancyhdr,titlesec}
+        \captionsetup{font=small,labelfont=bf,justification=raggedright,singlelinecheck=false}
+        \pagestyle{fancy}\fancyhf{}
+        \fancyhead[L]{\small\textit{Behind the AfD's 2025 Result}}
+        \fancyhead[R]{\small\textit{A Brief Empirical Note}}
+        \fancyfoot[C]{\small\thepage}
+        \renewcommand{\headrulewidth}{0.4pt}\renewcommand{\footrulewidth}{0pt}
+        \setlength{\parindent}{0.5in}\setlength{\parskip}{2pt}
+        \titleformat{\section}{\normalfont\large\bfseries}{}{0em}{}[\vspace{2pt}\titlerule]
+        \titleformat{\subsection}{\normalfont\normalsize\itshape}{}{0em}{}
+        \titlespacing*{\section}{0pt}{14pt}{12pt}
+        \titlespacing*{\subsection}{0pt}{8pt}{3pt}
+
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+# Introduction
+
+```{r}
+#| label: 00_setup
+#| include: false
+
+library(tidyverse)
+library(sf)
+library(haven)
+library(scales)
+library(gerda)
+library(gesisdata)
+library(inkaR)
+library(manifestoR)
+library(janitor)
+library(fixest)
+library(modelsummary)
+library(marginaleffects)
+library(patchwork)
+library(ggrepel)
+library(kableExtra)
+
+get_or_cache <- function(path, fetch_expr) {
+  if (file.exists(path)) readRDS(path)
+  else { data <- fetch_expr; saveRDS(data, path); data }
+}
+
+theme_research <- theme_classic(base_size = 11, base_family = "serif") +
+  theme(
+    plot.title   = element_text(size = 14, face = "bold", hjust = 0),
+    axis.title   = element_text(size = 6.5),
+    plot.caption = element_text(size = 7.5, hjust = 0.5, margin = margin(t = 4)),
+    legend.title = element_text(size = 8),
+    legend.text  = element_text(size = 8),
+    panel.grid   = element_blank(),
+    plot.margin  = margin(5, 5, 5, 5)
+  )
+theme_set(theme_research)
+
+theme_map <- theme(
+  axis.title = element_blank(),
+  axis.text  = element_blank(),
+  axis.ticks = element_blank(),
+  axis.line  = element_blank()
+)
+
+tbl <- function(df, caption = NULL, footnote = NULL, align = NULL) {
+  if (is.null(align)) align <- c("l", rep("r", ncol(df) - 1))
+  k <- knitr::kable(df, format = "latex", booktabs = TRUE, linesep = "",
+                    escape = TRUE, align = align, caption = caption,
+                    longtable = FALSE) %>%
+    kable_styling(full_width = FALSE, position = "center",
+                  latex_options = c("hold_position"), font_size = 8)
+  if (!is.null(footnote))
+    k <- add_footnote(k, footnote, notation = "none", threeparttable = TRUE,
+                      escape = FALSE)
+  k
+}
+```
+
+On 6 September 2026, the Alternative für Deutschland (AfD) secured 43.8 percent of the vote in the Saxony-Anhalt state election—a gain of 23 percentage points over its 2021 result and more than double the share of the second-place Christlich Demokratische Union (CDU). It is the largest electoral victory by a far-right party in postwar German history.
+
+Yet this is not entirely unexpected. Last year's Federal Election produced a historically unprecedented outcome. The AfD—founded in 2013 as a Euro-skeptic protest movement [@arzheimer2015] and subsequently transformed into an ethno-nationalist, right-wing populist force [@mudde2007; @norris_inglehart2019]—received 20.8 percent of the vote (*Zweitstimme*), finishing second behind the CDU/CSU bloc.
+
+Who votes for AfD, and why? Early scholars emphasized economic insecurity and social marginalization—the "modernization losers" thesis [@arzheimer2015; @lengfeld2017; @decker2016]—while more recent work highlights the primacy of cultural and attitudinal factors [@norris_inglehart2019; @hambauer_mays2018; @schmitt-beck2016]. Youth [@heinze_scheuer2025], men [@hudde2023], lower educationl attainment [@hambauer_mays2018] and strong anti-immigration attitudes [@arzheimer_berning2019; @hansen_olsen2022] are among the most studied predictors of AfD support. A parallel debate concerns the geographic dimension: Eastern Germany has consistently produced far higher AfD vote shares than the West, a gap that compositional differences in age, income, or unemployment explain only partially [@weisskircher2020; @arzheimer_berning2019]
+
+This research note contributes to this debate through a multi-method empirical analysis. First, I use municipality-level (*Gemeinde*) electoral data from the German Electoral Database (GERDA) to document the geographic structure of AfD support across Germany's municipalities, comparing 2021 and 2025 results. Second, I conduct a covariate balance check between Eastern and Western municipalities using INKAR socioeconomic indicators, establishing the structural context of the East-West gap. Third, I estimate linear probability models on the 2025 German Longitudinal Election Study (GLES) to identify individual-level predictors of AfD voting across four nested specifications. Fourth, I use Manifesto Project data to situate the AfD's ideological profile in the German party landscape. The analysis yields three main findings: the AfD's 2025 gains were nationwide but geographically amplified in Eastern Germany; right-wing extremist attitudes are the dominant predictors of AfD vote choice; and sociodemographic factors — income, unemployment, education — explain comparatively little once attitudinal variables are accounted for.
+
+# Data
+
+Four data sources underpin the analysis.
+
+*Electoral data* come from the German Electoral Database (GERDA), which provides harmonized municipality-level results for federal elections from 1990 to 2025, adjusted to consistent 2025 Gemeinde boundaries [@gerda]. I use AfD second-vote shares for 2021 and 2025 across all municipalities with valid observations, and append Zensus 2022 municipal demographic variables via GERDA's built-in census integration. Municipality polygons come from OpenDataSoft's georeferenced Gemeinde, merged using the eight-digit Amtlicher Gemeindeschlüssel (AGS) code.
+
+*Structural socioeconomic covariates* at the municipality level come from INKAR (*Indikatoren und Karten zur Raum- und Stadtentwicklung*), maintained by the Federal Institute for Research on Building, Urban Affairs and Spatial Development [@inkar2022]. I extract 2022 indicators covering demographics, economic conditions and population dynamics.
+
+*Individual-level survey data* come from the 2025 German Longitudinal Election Study (GLES) Cross-Section Post-Election Survey (ZA10100), conducted following the February 2025 election [@gles2025]. The survey employs a mixed-mode design (CAWI/PAPI) covering approximately 2,500 respondents with detailed batteries on political attitudes, issue positions, affective evaluations, and demographic characteristics. All variables are recoded following the official codebook (v4.0.0).
+
+*Party-level ideological scores* come from the Manifesto Project's 2025 coding of German party manifestos [@manifesto2024], using the right-left index (RILE)—computed as the share of right-coded minus left-coded quasi-sentences—to characterize party positioning.
+
+# Methods
+
+For the geographic analysis, I compute municipality-level change in AfD vote share in percentage points $(\Delta\text{AfD}_i = \text{AfD}_{i,2025} - \text{AfD}_{i,2021})$ and compare distributions between Eastern and Western Germany, classifying Eastern states as Brandenburg, Mecklenburg-Vorpommern, Sachsen, Sachsen-Anhalt, and Thüringen.[^1]
+
+[^1]: Berlin is excluded from the Eastern Germany classification on both historical and structural grounds. Although East Berlin was formally part of the German Democratic Republic, the city was divided throughout the Cold War and reunified as a single *Stadtstaat*---one of only three German states that simultaneously function as municipalities and *Länder*. As a result, Berlin carries a dual heritage that makes it constitutionally and demographically distinct from the five *neue Länder* [@weisskircher2020]. As Germany's largest metropolitan area, Berlin's socioeconomic profile, educational composition, and cosmopolitan social milieu are far closer to Hamburg or Munich than to the predominantly rural, post-industrial Eastern states; comparative research consistently documents that urbanicity, educational attainment, and diversity suppress radical-right voting [@norris_inglehart2019]. Berlin's 2025 AfD vote share (ca. 16%) was roughly half the party's average across the five Eastern states. Electoral studies of the East--West divide therefore routinely treat Berlin as a separate or excluded case [@weisskircher2020; @heinze_scheuer2025].
+
+For individual-level analyses, I estimate linear probability models (OLS) of the form: $$\Pr(\text{AfD Vote}_j = 1) = \alpha + \mathbf{X}_j\boldsymbol{\beta} + \varepsilon_j$$ where $\mathbf{X}_j$ is a vector of covariates for respondent $j$. Four nested specifications add successive conceptual blocks: (1) demographics, (2) political predispositions and issue positions, (3) right-wing extremist attitudes, and (4) with federal-state fixed effects. Standard errors are clustered by federal state (16 clusters) throughout, accounting for within-state homogeneity in political environments and AfD organizational capacity [@king_roberts2015].
+
+```{r}
+#| label: 01_load_data
+#| include: false
+
+gerda_fed_elec <- get_or_cache(
+  "data/raw/GERDA/gerda_fed_elec.rds",
+  load_gerda_web("federal_muni_harm_25") %>% add_gerda_census()
+)
+
+germany_gemeinde <- get_or_cache(
+  "data/raw/germany_gemeinde.rds",
+  st_read("data/raw/georef-germany-gemeinde.geojson")
+)
+
+gles_2025 <- get_or_cache(
+  "data/raw/German Longitudinal Election Study/gles_2025.rds",
+  read_dta("data/raw/German Longitudinal Election Study/ZA10100_v4-0-0_en.dta")
+)
+
+marpor_df <- get_or_cache(
+  "data/raw/marpor_df.rds",
+  { mp_setapikey(key = "YOUR_API_KEY"); mp_maindataset() }
+)
+
+county_data <- get_or_cache(
+  "data/raw/inkar_county_2022.rds",
+  get_inkar_data(
+    variable = c("1","2","20","23","24","25","26","27","123","124",
+                 "139","216","150","248","295","17","156","10","320"),
+    level = "GEM", year = 2022, lang = "en"
+  )
+)
+```
+
+# Results
+
+**Geographic patterns.** @fig-maps maps AfD vote shares in 2025 (left) and their change relative to 2021 (right) across 10,676 municipalities. The absolute-share map reveals a pronounced East-West gradient: municipalities in Saxony and Thuringia frequently exceeded 35 percent, while most Western municipalities remained below 20 percent.
+
+```{r}
+#| label: fig1-afd-2025
+#| include: false
+
+germany_gemeinde_clean <- germany_gemeinde %>%
+  mutate(muni_suffix = str_sub(gem_code, -3),
+         ags_code    = paste0(krs_code, muni_suffix))
+
+afd_2025 <- gerda_fed_elec %>%
+  filter(election_year == 2025) %>%
+  select(ags, ags_name, state_name, county, election_year, vote_share = afd) %>%
+  add_gerda_census() %>%
+  mutate(ags_code = sprintf("%08d", as.numeric(ags)))
+
+map_data <- germany_gemeinde_clean %>%
+  inner_join(afd_2025, by = "ags_code") %>%
+  st_transform(crs = 3035)
+
+plot_afd_2025 <- ggplot(map_data) +
+  geom_sf(aes(fill = vote_share), color = NA) +
+  scale_fill_viridis_c(option = "magma", name = "AfD Vote Share",
+                       labels = label_percent(accuracy = 0.1)) +
+  labs(caption = "Data: GERDA Database & OpenDataSoft Boundaries") +
+  theme_map
+```
+
+```{r}
+#| label: fig2-afd-change
+#| include: false
+
+afd_change <- gerda_fed_elec %>%
+  filter(election_year %in% c(2021, 2025)) %>%
+  select(ags, election_year, afd) %>%
+  pivot_wider(names_from = election_year, values_from = afd, names_prefix = "afd_") %>%
+  mutate(change   = (afd_2025 - afd_2021) * 100,
+         ags_code = sprintf("%08d", as.numeric(ags))) %>%
+  filter(!is.na(change), !is.nan(change))
+
+map_data_change <- germany_gemeinde_clean %>%
+  inner_join(afd_change, by = "ags_code") %>%
+  st_transform(crs = 3035)
+
+plot_afd_change <- ggplot(map_data_change) +
+  geom_sf(aes(fill = change), color = NA) +
+  scale_fill_viridis_c(option = "magma", name = "Change (pp)",
+                       labels = label_number(accuracy = 0.1)) +
+  labs(caption = "Data: GERDA Database & OpenDataSoft Boundaries") +
+  theme_map
+```
+
+```{r}
+#| label: fig-maps
+#| fig-cap: "AfD Vote Share in 2025 and Change in Vote Share, 2021–2025"
+#| fig-align: center
+#| out-width: 100%
+#| fig-width: 10
+#| fig-height: 4.5
+
+plot_afd_2025 + plot_afd_change + plot_layout(ncol = 2)
+```
+
+The change map suggests a similar spatial pattern, a finding confirmed by @fig-fig4-afd-change-distribution: Eastern municipalities gained a median of 18.0 percentage points against 11.7 in the West, indicating that the 2025 Federal Election was simultaneously a nationwide shift and a further deepening of pre-existing regional divergence.
+
+**Structural divergences: East vs. West.** @tbl-balance presents the covariate balance check. Eastern municipalities exhibit higher unemployment, lower purchasing power, a markedly lower share of foreign-born residents, and older and declining populations. These divergences are consistent with both the "modernization losers" thesis [@arzheimer2015; @lengfeld2017] and cultural-threat accounts [@norris_inglehart2019], and contextualise the geographic patterns in @fig-maps.
+
+```{r}
+#| label: tbl-balance
+#| echo: false
+#| tbl-cap: "Descriptive Statistics and Municipal Covariate Balance: East vs. West Germany"
+
+inkar_wide <- county_data %>%
+  filter(year == 2022) %>%
+  select(region_id, indicator_name, value) %>%
+  pivot_wider(names_from = indicator_name, values_from = value) %>%
+  janitor::clean_names() %>%
+  mutate(
+    ags_code      = sprintf("%08d", as.numeric(region_id)),
+    unemp_rate    = (unemployed / total_population) * 100,
+    percentage_of_residents_aged_18_to_under_30 =
+      percentage_of_residents_aged_18_to_under_25 +
+      percentage_of_residents_aged_25_to_under_30
+  )
+
+covariates <- gerda_fed_elec %>%
+  filter(election_year == 2025) %>%
+  mutate(
+    ags_code = sprintf("%08d", as.numeric(ags)),
+    is_east  = factor(
+      ifelse(state_name %in% c("Brandenburg","Mecklenburg-Vorpommern",
+                               "Sachsen","Sachsen-Anhalt","Thüringen"),
+             "East Germany", "West Germany"),
+      levels = c("West Germany", "East Germany")
+    )
+  ) %>%
+  left_join(inkar_wide, by = "ags_code")
+
+table1_data <- covariates %>%
+  select(
+    is_east,
+    `Share Foreign (%)`                 = share_foreign_census22,
+    `Share Migration Background (%)`    = share_migration_bg_census22,
+    `Average Rent (€/m²)`               = avg_rent_per_m2_census22,
+    `Share of homeowners (%)`            = share_owner_occupied_census22,
+    `Female (%)`                        = percentage_of_women_in_the_population,
+    `Youth (%)`                         = percentage_of_residents_aged_18_to_under_30,
+    `Purchasing Power per Capita (€)`   = purchasing_power_per_capita_in_euros,
+    `Average Age (Years)`               = average_age_of_the_population_in_years,
+    `Population Density (per km²)`      = inhabitants_per_km2,
+    `Unemployment rate (%)`             = unemp_rate,
+    `Population growth in 10 years (%)` = development_of_the_number_of_inhabitants_over_the_last_10_years_in_percent
+  )
+
+west <- table1_data %>% filter(is_east == "West Germany") %>% select(-is_east)
+east <- table1_data %>% filter(is_east == "East Germany") %>% select(-is_east)
+
+n_munis <- nrow(table1_data)
+
+table1 <- purrr::map_dfr(names(west), \(var) {
+  x_w <- west[[var]]; x_e <- east[[var]]
+  tibble(
+    Variable                   = var,
+    `West Mean`                = mean(x_w, na.rm = TRUE),
+    `West SD`                  = sd(x_w,   na.rm = TRUE),
+    `East Mean`                = mean(x_e, na.rm = TRUE),
+    `East SD`                  = sd(x_e,   na.rm = TRUE),
+    `Diff. (East - West)` = mean(x_e, na.rm = TRUE) - mean(x_w, na.rm = TRUE),
+    `Std. Error`               = sqrt(var(x_e, na.rm = TRUE) / sum(!is.na(x_e)) +
+                                      var(x_w, na.rm = TRUE) / sum(!is.na(x_w)))
+  )
+}) %>%
+  mutate(across(where(is.numeric), ~ sprintf("%.2f", .x)))
+
+tbl(table1,
+    footnote = "Data: GERDA Database and INKAR (2022). Difference is East Germany minus West Germany.",
+    align    = c("l", rep("r", 6)))
+```
+
+```{r}
+#| label: fig-fig4-afd-change-distribution
+#| fig-cap: "Distribution of Changes in AfD Vote Share, 2021–2025: East vs. West Germany"
+#| fig-align: center
+#| out-width: 100%
+
+afd_change_region <- afd_change %>%
+  left_join(covariates %>% select(ags_code, is_east) %>% distinct(), by = "ags_code")
+
+region_stats <- afd_change_region %>%
+  group_by(is_east) %>%
+  summarise(median = median(change, na.rm = TRUE), iqr = IQR(change, na.rm = TRUE))
+
+ggplot(afd_change_region, aes(x = change)) +
+  geom_histogram(binwidth = 2, boundary = 0) +
+  geom_vline(data = region_stats, aes(xintercept = median), linetype = "dashed") +
+  geom_text(
+    data = region_stats,
+    aes(x = Inf, y = Inf, label = sprintf("Median = %.1f pp\nIQR = %.1f pp", median, iqr)),
+    hjust = 1.1, vjust = 1.5, size = 3.5
+  ) +
+  facet_wrap(~ is_east, ncol = 1) +
+  labs(x = "Change in AfD Vote Share (percentage points)",
+       y = "Number of municipalities",
+       caption = "Data: GERDA Database") +
+  theme(axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10),
+        panel.border  = element_rect(linewidth = 0.3, fill = NA),
+        axis.line     = element_line(linewidth = 0.3))
+```
+
+**OLS results.** @tbl-ols presents four nested linear probability models of AfD voting. Consistent with prior work [@hambauer_mays2018; @hansen_olsen2022; @arzheimer_berning2019], demographics alone (Model 1) explain little variance: higher education is negatively associated with AfD voting, while age and income gradients are substantively small. Adding political predispositions and issue positions (Model 2) modestly improves fit — higher political interest and perceived foreign electoral influence are each positively associated with AfD voting, in line with evidence that political disaffection and anti-establishment attitudes are key drivers of far-right support [@hansen_olsen2022; @schmitt-beck2016]. Model 3 incorporates right-wing extremist attitudes: agreement that Germany needs a strong nationalist party and that it is "over-foreignized" are large, positive, and highly significant predictors, and their inclusion substantially attenuates most demographic and predisposition coefficients — consistent with the view that sociodemographic characteristics shape AfD support primarily through their effect on nativist and authoritarian attitudes [@norris_inglehart2019; @arzheimer_berning2019; @hambauer_mays2018]. Model 4 adds state fixed effects to absorb unobserved time-invariant heterogeneity across Germany's 16 *Länder* — differences in political culture, historical legacies, and party organizational capacity that could otherwise confound individual-level estimates. Standard errors are clustered by federal state throughout, following best practice for settings where treatment assignment (here, exposure to state-level political environments) operates at a higher level than the unit of observation [@king_roberts2015]. Right-wing extremist attitude coefficients remain large and significant in Model 4, confirming that these attitudinal predictors are not merely proxies for state-level context. Appendix @fig-coef-plot and @fig-marginal-effects display these results graphically.
+
+```{r}
+#| label: tbl-ols
+#| echo: false
+#| tbl-cap: "Determinants of AfD Second Vote in 2025 (Linear Probability Model)"
+
+gles_prep <- gles_2025 %>%
+  mutate(across(everything(), ~ {
+    if (is.numeric(.x) || haven::is.labelled(.x)) {
+      x_num <- suppressWarnings(as.numeric(haven::zap_labels(.x)))
+      if_else(x_num < 0, NA_real_, x_num)
+    } else .x
+  })) %>%
+  mutate(
+    afd_vote       = if_else(coalesce(q114ba, q114bb) == 322, 1, 0, missing = NA_real_),
+    age            = 2025 - suppressWarnings(as.numeric(as.character(d2a))),
+    female         = if_else(d1 == 2, 1, 0, missing = NA_real_),
+    high_education = case_when(d7 %in% c(4,5) ~ 1, d7 %in% c(1,2,3) ~ 0, TRUE ~ NA_real_),
+    income         = d63,
+    religiosity    = d41,
+    pol_interest   = 6 - q1,
+    pol_knowledge  = if_else(q5 == 2, 1, 0, missing = NA_real_),
+    elections_fair = q12b,
+    foreign_influ  = 6 - q12d,
+    rw_nat_party   = 6 - q166a,
+    rw_foreignized = 6 - q166c,
+    state          = as.factor(bula)
+  )
+
+m1 <- feols(afd_vote ~ age + female + high_education + income + religiosity,
+            gles_prep, cluster = ~state)
+m2 <- feols(afd_vote ~ age + female + high_education + income + religiosity +
+              pol_interest + pol_knowledge + elections_fair + foreign_influ,
+            gles_prep, cluster = ~state)
+m3 <- feols(afd_vote ~ age + female + high_education + income + religiosity +
+              pol_interest + pol_knowledge + elections_fair + foreign_influ +
+              rw_nat_party + rw_foreignized,
+            gles_prep, cluster = ~state)
+m4 <- feols(afd_vote ~ age + female + high_education + income + religiosity +
+              pol_interest + pol_knowledge + elections_fair + foreign_influ +
+              rw_nat_party + rw_foreignized | state,
+            gles_prep, cluster = ~state)
+
+coef_labels <- c(
+  age            = "Age (Years)",
+  female         = "Female (1=Yes)",
+  high_education = "High Education",
+  income         = "Household Income",
+  religiosity    = "Religiosity (1=none...4=very)",
+  pol_interest   = "Political Interest (1=low...5=high)",
+  pol_knowledge  = "Political Knowledge (1=Correct)",
+  elections_fair = "Fair Elections",
+  foreign_influ  = "Foreign Influence",
+  rw_nat_party   = "Need Strong Nationalist Party",
+  rw_foreignized = "Germany Over-Foreignized"
+)
+
+modelsummary(
+  list("(1)" = m1, "(2)" = m2, "(3)" = m3, "(4)" = m4),
+  output      = "kableExtra",
+  estimate    = "{estimate}{stars}",
+  statistic   = "({std.error})",
+  stars       = c("*" = 0.05, "**" = 0.01, "***" = 0.001),
+  gof_map     = c("nobs", "r.squared"),
+  coef_rename = coef_labels,
+  coef_omit   = "Intercept",
+) %>%
+  kable_styling(full_width = FALSE, position = "center",
+                latex_options = c("hold_position"), font_size = 8) %>%
+  add_footnote(
+    "\\footnotesize Standard errors clustered by federal state in parentheses. Model 4 includes state fixed effects. * p<0.05, ** p<0.01, *** p<0.001. Scale codings: Age (years); Female (1=yes); Religiosity (1=none...4=very); Political Interest (1=low...5=high); Political Knowledge (1=correct); Electoral Integrity: Fair (1=agree...5=disagree); Perceived Foreign Influence (1=disagree...5=agree); Need Strong Nationalist Party and Germany Over-Foreignized (1=disagree...5=agree). Data: GLES.",
+    notation = "none", threeparttable = TRUE, escape = FALSE
+  )
+```
+
+**Ideological positioning.** @tbl-domains documents the programmatic emphasis of German parties in their 2025 manifestos.
+
+```{r}
+#| label: tbl-domains
+#| echo: false
+#| tbl-cap: "Manifesto Content by Domain: German Parties, 2025 Federal Election"
+
+marpor_germany <- marpor_df %>% filter(country == 41)
+
+domain_summary <- marpor_germany %>%
+  filter(date == 202502) %>%
+  transmute(
+    Party      = partyabbrev,
+    External   = rowSums(pick(per101:per110), na.rm = TRUE),
+    Democracy  = rowSums(pick(per201:per204), na.rm = TRUE),
+    Government = rowSums(pick(per301:per305), na.rm = TRUE),
+    Economy    = rowSums(pick(per401:per416), na.rm = TRUE),
+    Welfare    = rowSums(pick(per501:per507), na.rm = TRUE),
+    Society    = rowSums(pick(per601:per608), na.rm = TRUE),
+    Groups     = rowSums(pick(per701:per706), na.rm = TRUE),
+    Uncoded    = peruncod
+  ) %>%
+  mutate(Total = rowSums(pick(where(is.numeric)), na.rm = TRUE),
+         across(where(is.numeric), ~ sprintf("%.2f", .x)))
+
+tbl(domain_summary,
+    footnote = "\\footnotesize Entries represent the percentage of quasi-sentences assigned to each MARPOR domain. Data: MARPOR. German parties, 2025 federal election.")
+```
+
+The AfD devotes the largest share of quasi-sentences to the Society domain (`r domain_summary %>% filter(Party == "AfD") %>% pull(Society)`%), which encompasses nationalism, traditional morality, and multiculturalism — the cultural-identitarian core of the party's platform. This contrasts sharply with mainstream parties: the SPD and Greens allocate proportionally more attention to Welfare and Economy, while the CDU/CSU balance Government and Economy themes. The AfD's relatively low engagement with Economy (`r domain_summary %>% filter(Party == "AfD") %>% pull(Economy)`%) challenges the "economic protest" interpretation of AfD support: the party's manifesto prioritizes cultural and identitarian claims over distributive or regulatory economic commitments.
+
+```{r}
+#| label: tbl-positioning
+#| echo: false
+#| tbl-cap: "Net Policy Positioning by Domain: German Parties, 2025 Federal Election"
+
+marpor_positioning_net <- marpor_germany %>%
+  filter(as.character(coderyear) == "2025") %>%
+  transmute(
+    Party            = partyabbrev,
+    Foreign          = per101 - per102,
+    Military         = per104 - per105,
+    `Intl / EU`      = (per107 + per108) - (per109 + per110),
+    Protectionism    = per406 - per407,
+    Welfare          = per504 - per505,
+    Education        = per506 - per507,
+    Nationalism      = per601 - per602,
+    Multiculturalism = per607 - per608,
+    Labour           = per701 - per702
+  ) %>%
+  as_tibble() %>%
+  mutate(across(where(is.numeric), ~ sprintf("%.2f", .x)))
+
+tbl(marpor_positioning_net,
+    footnote = "\\footnotesize Net position is the percentage of quasi-sentences supporting the positive position minus the negative. Positive values indicate relatively more positive statements; negative the reverse. Data: MARPOR.")
+```
+
+@tbl-positioning translates this into net positioning on specific policy dimensions. The AfD posts the most extreme net score on Nationalism (`` `r marpor_positioning_net %>% filter(Party == "AfD") %>% pull(Nationalism)` ``) — far exceeding the next-closest party — and the most negative net score on Multiculturalism (`` `r marpor_positioning_net %>% filter(Party == "AfD") %>% pull(Multiculturalism)` ``), reflecting systematic programmatic opposition to multicultural society. On EU integration, the AfD is the only party with a strongly negative net position (`` `r marpor_positioning_net %>% filter(Party == "AfD") %>% pull("Intl / EU")` ``), consistent with its Eurosceptic and sovereigntist foreign policy stance. Overall, the AfD's 2025 manifesto represents a coherent far-right ideological profile: culturally nativist and institutionally Eurosceptic.
+
+```{r}
+#| label: fig-rile-space
+#| fig-cap: "German Political Space (2025): Economic Orientation vs. RILE Ideology"
+#| fig-align: center
+#| out-width: 100%
+#| fig-width: 10
+#| fig-height: 5
+
+marpor_scaled <- marpor_df %>%
+  filter(
+    countryname == "Germany" | country == 41,
+    lubridate::year(edate) == 2025 | substr(as.character(date), 1, 4) == "2025"
+  ) %>%
+  filter(
+    party %in% c(41113,41223,41320,41420,41521,41522,41911,41952,41953) |
+      partyabbrev %in% c("CDU","CSU","CDU/CSU","SPD","AfD","FDP",
+                         "LINKE","Die Linke","GRÜNE","90/Grüne","B90/Grüne","BSW","SSW","SJ")
+  ) %>%
+  mutate(net_market = markeco - planeco)
+
+ggplot(marpor_scaled, aes(x = net_market, y = rile, label = partyabbrev)) +
+  geom_hline(yintercept = 0, linetype = "dashed", linewidth = 0.5) +
+  geom_vline(xintercept = 0, linetype = "dashed", linewidth = 0.5) +
+  geom_point(size = 3) +
+  geom_text_repel(family = "serif", size = 3.5, box.padding = 0.5) +
+  labs(
+    x        = "<--- Pro-State / Planned Economy | Pro-Market / Free Economy --->",
+    y        = "<--- Left (RILE) | Right (RILE) --->",
+    caption  = "Note: RILE measures parties' left-right ideological positioning. Data: MARPOR, 2025 German federal election."
+  ) +
+  theme(axis.title = element_text(size = 13),
+        axis.text  = element_text(size = 11))
+```
+
+@fig-rile-space positions German parties on the RILE dimension using 2025 Manifesto data. The AfD scores `r round(marpor_scaled %>% filter(partyabbrev == "AfD") %>% pull(rile), 1)` on the RILE scale---the most extreme right position in the German party system, approximately `r round((marpor_scaled %>% arrange(desc(rile)) %>% slice(1:2) %>% summarise(gap = first(rile) - last(rile)) %>% pull(gap)), 1)` points more right-wing than the next-closest party (`r marpor_scaled %>% arrange(desc(rile)) %>% slice(2) %>% pull(partyabbrev)`).
+
+# Conclusion
+
+The AfD's 2025 result is not easily reduced to a single cause, and this note has tried to resist that temptation. The surge was simultaneously geographic — concentrated in Eastern Germany but with real gains across the West — attitudinal, structural, and ideological. What binds these dimensions together is a sense, widespread among AfD voters, that Germany's political mainstream no longer speaks for them, that the nation's identity is under threat, and that democratic institutions have failed to respond. The AfD successfully channeled this dissatisfaction by offering a coherent far-right program to a constituency already ideologically primed to embrace it [@mudde2007].
+
+This has uncomfortable implications. The persistence of right-wing extremist attitudes as the dominant predictor of AfD voting — surviving controls for demographics, political disaffection, and state fixed effects — suggests that the party's support is not a correctable artifact of economic policy failure. Redistributive responses to Eastern Germany's structural lag may be necessary and just, but they are unlikely on their own to dissolve the attitudinal foundations that now sustain AfD voting.
+
+What this note cannot settle is whether what we are observing is a durable ideological realignment or a protest vote that has not yet found a more satisfying destination. That distinction matters enormously — for democratic theory, for party strategy, and for the millions of German voters who did not choose the AfD but must now share a political system with its growing presence. Future research should address the causal pathways connecting structural grievances, right-wing attitudes, and AfD voting—dynamics that require panel data or experimental designs. The AfD's organizational capacity in Eastern Germany and its capacity for territorial rooting across the West also warrant comparative-historical analysis as Germany faces the prospect of consolidated far-right representation as a permanent feature of its party system.
+
+\newpage
+
+# References
+
+::: {#refs}
+:::
+
+\newpage
+
+# Appendix
+
+@fig-4 replicates the municipality-level 2021–2025 scatterplot, with a 45-degree line indicating zero net change. All 10,676 municipalities lie above the diagonal.
+
+```{r}
+#| label: fig-4
+#| fig-cap: "AfD Vote Share: 2021 vs. 2025"
+#| fig-align: center
+#| out-width: 100%
+#| fig-width: 10
+#| fig-height: 4.5
+
+ggplot(afd_change, aes(x = afd_2021, y = afd_2025)) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  scale_x_continuous(labels = label_percent()) +
+  scale_y_continuous(labels = label_percent()) +
+  labs(x = "AfD Vote Share, 2021", y = "AfD Vote Share, 2025",
+       caption = "Data: GERDA Database") +
+  theme(axis.title = element_text(size = 13),
+        axis.text  = element_text(size = 11))
+```
+
+@fig-coef-plot and @fig-marginal-effects display the OLS regression estimates graphically. @fig-coef-plot shows coefficient estimates and 95% confidence intervals across all four nested models. @fig-marginal-effects shows predicted probabilities of AfD voting across the range of three key attitudinal predictors from the full model (Model 4), holding all other covariates at observed values.
+
+```{r}
+#| label: fig-coef-plot
+#| fig-cap: Coefficient Estimates Across Nested Specifications
+#| fig-align: center
+#| out-width: 100%
+#| fig-width: 12
+#| fig-height: 6
+
+modelplot(
+  list("(1)" = m1, "(2)" = m2, "(3)" = m3, "(4)" = m4),
+  coef_map   = coef_labels[names(coef_labels) != "(Intercept)"],
+  conf_level = 0.95,
+  color = "black"
+) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  facet_wrap(~ model, nrow = 1) +
+  labs(
+    title    = "Coefficient Estimates Across Nested Specifications",
+    subtitle = "Points = OLS coefficients; bars = 95% confidence intervals",
+    x        = "Estimate (change in probability of an AfD vote)",
+    y        = NULL,
+    caption  = stringr::str_wrap(
+      "Note: Standard errors clustered by federal state. Model 4 includes state fixed effects. Data: GLES 2025 (ZA10100). Scale codings: Age (years); Female (1=yes); Religiosity (1=none...4=very); Political Interest (1=low...5=high); Political Knowledge (1=correct); Electoral Integrity: Fair (1=agree...5=disagree); Perceived Foreign Influence (1=disagree...5=agree); Need Strong Nationalist Party and Germany Over-Foreignized (1=disagree...5=agree).",
+      width = 130
+    )
+  ) +
+  theme(legend.position   = "none",
+        strip.text        = element_text(face = "bold", size = 13),
+        axis.text.y       = element_text(size = 11),
+        axis.text.x       = element_text(size = 11),
+        axis.title.x      = element_text(size = 13),
+        plot.caption      = element_text(size = 10, hjust = 0.5, color = "black"),
+        plot.margin       = margin(t = 5, r = 5, b = 20, l = 5))
+```
+
+```{r}
+#| label: fig-marginal-effects
+#| fig-cap: "Predicted Probability of AfD Vote by Key Attitudinal Predictors"
+#| fig-align: center
+#| out-width: 100%
+#| fig-width: 12
+#| fig-height: 5
+
+vars_to_plot <- c(
+  elections_fair = "Fair Elections",
+  rw_foreignized = "Germany Over-Foreignized",
+  pol_interest   = "Political Interest"
+)
+
+marginal_plots <- lapply(names(vars_to_plot), \(v) {
+  p <- plot_predictions(m4, condition = v, vcov = FALSE) +
+    geom_rug(data = gles_prep, aes(x = .data[[v]]),
+             inherit.aes = FALSE, sides = "b", alpha = 0.15) +
+    labs(title = vars_to_plot[[v]], x = NULL, y = "Predicted P(AfD vote)") +
+    coord_cartesian(ylim = c(0, 1)) +
+    theme(plot.title   = element_text(size = 14, face = "bold"),
+          axis.text.x  = element_text(size = 12),
+          axis.text.y  = element_text(size = 12),
+          axis.title.y = element_text(size = 13))
+  p
+})
+
+wrap_plots(marginal_plots, ncol = 3) +
+  plot_annotation(
+    caption = stringr::str_wrap(
+      "Data: GLES 2025 (ZA10100). Predicted probabilities from Model 4 (LPM with state FE). Scale: Electoral Integrity: Fair (1=agree...5=disagree); Germany Over-Foreignized (1=disagree...5=agree, recoded); Political Interest (1=not at all...5=very interested).",
+      width = 120
+    ),
+    theme = theme(
+      plot.caption = element_text(size = 10, hjust = 0.5, color = "black"),
+      plot.margin  = margin(t = 5, r = 5, b = 20, l = 5)
+    )
+  )
+```
